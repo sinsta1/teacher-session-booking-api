@@ -1,0 +1,483 @@
+{
+  "info": {
+    "name": "Teacher Session Booking API",
+    "description": "Run the entire collection in order against a local development database. It creates a teacher, a unique student, and a session. Re-running is supported; test data remains in the database. Dates and IDs are generated automatically.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Create teacher",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/teachers",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"Demo Teacher\",\n  \"email\": \"teacher@example.com\",\n  \"specialization\": \"Computer Science\",\n  \"experience\": 5\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "pm.collectionVariables.set(\"teacherId\", pm.response.json().data._id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Create user",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/users",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"Demo Student\",\n  \"email\": \"{{userEmail}}\",\n  \"phone\": \"+91 9000000000\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set(\"userEmail\", \"student-\" + pm.variables.replaceIn(\"{{$guid}}\") + \"@example.com\");"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "pm.collectionVariables.set(\"userId\", pm.response.json().data._id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Duplicate email rejected",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/users",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"Demo Student\",\n  \"email\": \"{{userEmail}}\",\n  \"phone\": \"1234567890\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Create session",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/sessions",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"teacherId\": \"{{teacherId}}\",\n  \"startTime\": \"{{startTime}}\",\n  \"endTime\": \"{{endTime}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const start = new Date(Date.now() + 86400000);",
+              "start.setUTCHours(10,0,0,0);",
+              "pm.collectionVariables.set(\"startTime\", start.toISOString());",
+              "pm.collectionVariables.set(\"endTime\", new Date(start.getTime() + 3600000).toISOString());",
+              "pm.collectionVariables.set(\"dateTimestamp\", String(start.getTime()));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "pm.collectionVariables.set(\"sessionId\", pm.response.json().data._id);",
+              "pm.test(\"Initially available\", () => pm.expect(pm.response.json().data.status).to.eql(\"AVAILABLE\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 List available sessions",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/sessions/available?dateTimestamp={{dateTimestamp}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Session is available\", () => pm.expect(pm.response.json().data.map(s => s._id)).to.include(pm.collectionVariables.get(\"sessionId\")));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 Available session cannot be completed",
+      "request": {
+        "method": "PATCH",
+        "header": [],
+        "url": "{{baseUrl}}/sessions/{{sessionId}}/complete"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 Book session",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/sessions/{{sessionId}}/book",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userId\": \"{{userId}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Booked by user\", () => { const s=pm.response.json().data; pm.expect(s.status).to.eql(\"BOOKED\"); pm.expect(s.userId).to.eql(pm.collectionVariables.get(\"userId\")); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 Double booking rejected",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/sessions/{{sessionId}}/book",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userId\": \"{{userId}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 Booked session excluded from availability",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/sessions/available?dateTimestamp={{dateTimestamp}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Booked session excluded\", () => pm.expect(pm.response.json().data.map(s => s._id)).not.to.include(pm.collectionVariables.get(\"sessionId\")));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 Upcoming history",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/users/{{userId}}/sessions"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Session is upcoming\", () => pm.expect(pm.response.json().data.upcomingSessions.map(s => s._id)).to.include(pm.collectionVariables.get(\"sessionId\")));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 Complete session",
+      "request": {
+        "method": "PATCH",
+        "header": [],
+        "url": "{{baseUrl}}/sessions/{{sessionId}}/complete"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Completed with timestamp\", () => {const s=pm.response.json().data; pm.expect(s.status).to.eql(\"COMPLETED\"); pm.expect(s.completedAt).to.be.a(\"string\");});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 Repeated completion rejected",
+      "request": {
+        "method": "PATCH",
+        "header": [],
+        "url": "{{baseUrl}}/sessions/{{sessionId}}/complete"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 Completed history",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/users/{{userId}}/sessions"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Session moved to completed\", () => { const d=pm.response.json().data; const id=pm.collectionVariables.get(\"sessionId\"); pm.expect(d.completedSessions.map(s => s._id)).to.include(id); pm.expect(d.upcomingSessions.map(s => s._id)).not.to.include(id); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 Invalid timestamp rejected",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/sessions/available?dateTimestamp=invalid"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16 Unknown user rejected",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/sessions/{{sessionId}}/book",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userId\": \"000000000000000000000001\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "17 Invalid time range rejected",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/sessions",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"teacherId\": \"{{teacherId}}\",\n  \"startTime\": \"{{endTime}}\",\n  \"endTime\": \"{{startTime}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
